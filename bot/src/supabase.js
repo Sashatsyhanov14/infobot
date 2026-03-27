@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const dotenv = require('dotenv');
+const crypto = require('crypto');
 
 dotenv.config();
 
@@ -11,7 +12,6 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-const crypto = require('crypto');
 
 module.exports = {
   supabase,
@@ -39,7 +39,19 @@ module.exports = {
     return { data, error };
   },
 
-  async getExcursions() {
+  async updateUser(telegramId, updates) {
+    const { data, error } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('telegram_id', telegramId)
+      .select()
+      .single();
+    if (error) console.error('Supabase updateUser error:', error.message);
+    return { data, error };
+  },
+
+  // Generic catalog items (replaces getExcursions/getTariffs)
+  async getItems() {
     const { data, error } = await supabase
       .from('excursions')
       .select('id, sort_number, city, title, description, price_rub, duration, included, meeting_point, image_url')
@@ -60,7 +72,8 @@ module.exports = {
     const { error } = await supabase
       .from('chat_history')
       .delete()
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .in('role', ['user', 'assistant']);
     return { error };
   },
 
@@ -69,6 +82,7 @@ module.exports = {
       .from('chat_history')
       .select('role, content')
       .eq('user_id', userId)
+      .in('role', ['user', 'assistant'])
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -79,27 +93,4 @@ module.exports = {
     const { data, error } = await supabase.from('faq').select('*');
     return { data, error };
   },
-
-  async createRequest(userId, excursionId, excursionTitle, fullName, tourDate, hotelName, priceRub) {
-    const reqId = crypto.randomUUID();
-    const { data, error } = await supabase
-      .from('requests')
-      .insert([{
-        id: reqId,
-        user_id: userId,
-        excursion_id: excursionId,
-        excursion_title: excursionTitle,
-        full_name: fullName,
-        tour_date: tourDate,
-        hotel_name: hotelName,
-        price_rub: priceRub,
-        status: 'new',
-        created_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
-
-    if (error) console.error('Supabase createRequest error:', error.message);
-    return { data, error };
-  }
 };

@@ -44,7 +44,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, balance,
 
     return (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="w-full max-w-sm bg-white dark:bg-[#1a191d] border border-white/5 rounded-t-2xl sm:rounded-2xl p-6 shadow-[0_30px_60px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-300 text-on-surface">
+            <div className="w-full max-w-sm bg-[#1a191d] border border-white/5 rounded-t-2xl sm:rounded-2xl p-6 shadow-[0_30px_60px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-300 text-on-surface">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-bold font-headline">{t.title}</h2>
                     <button onClick={onClose} className="p-1 rounded-full hover:bg-surface-container-highest transition-colors flex items-center justify-center">
