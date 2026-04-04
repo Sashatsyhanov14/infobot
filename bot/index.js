@@ -1,9 +1,10 @@
 const { Telegraf, session, Markup } = require('telegraf');
 const dotenv = require('dotenv');
+const path = require('path');
 const { supabase, getUser, createUser, updateUser, getItems, saveMessage, getHistory, getFaq, clearHistory } = require('./src/supabase');
 const { getChatResponse, getLocalizedText } = require('./src/openai');
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, './.env') });
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
@@ -177,8 +178,12 @@ bot.on('text', async (ctx) => {
             await ctx.reply(finalResponse);
         }
 
-    } catch (err) {
-        console.error('[BOT ERROR]:', err.message);
+    } catch (error) {
+        console.error('[OpenAI Fatal Error]:', error.message);
+        if (error.response) {
+            console.error('[OpenAI Status]:', error.response.status);
+            console.error('[OpenAI Data]:', error.response.data);
+        }
         try { await ctx.reply('Извини, произошла ошибка. Попробуй чуть позже. 🙏'); } catch (e) {}
     }
 });
