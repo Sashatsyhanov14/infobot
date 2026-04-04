@@ -34,7 +34,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ isOpen, onClose, balance,
 
     if (!isOpen) return null;
 
-    const t = translations[lang];
+    const t = (translations as any)[lang] || translations.ru;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
