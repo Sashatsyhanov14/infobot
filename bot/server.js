@@ -12,17 +12,6 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// API endpoint to get configuration for WebApp
-app.get('/api/config', (req, res) => {
-    res.json({
-        supabase_url: process.env.SUPABASE_URL,
-        supabase_anon_key: process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
-        bot_username: process.env.BOT_USERNAME,
-        app_title: process.env.APP_TITLE || 'Mini App',
-        niche: process.env.NICHE_TYPE || 'general'
-    });
-});
-
 // Serve static files from the React app
 const webappDistPath = path.join(__dirname, '../webapp/dist');
 app.use(express.static(webappDistPath));

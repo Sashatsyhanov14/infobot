@@ -1,189 +1,309 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-export default function AdminStats({ t, globalStats }: { t: any, globalStats: any }) {
-    const [isUsersExpanded, setIsUsersExpanded] = useState(false);
-    const [usersInfo, setUsersInfo] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+const PAYOUT_PREFIX = 'PAYOUT_RECORD:';
+
+const AdminStats: React.FC<{ t: any }> = ({ t }) => {
+    const [stats, setStats] = useState({ totalUsers: 0 });
+    const [referralRows, setReferralRows] = useState<any[]>([]);
+    const [managers, setManagers] = useState<any[]>([]);
     const [newManagerId, setNewManagerId] = useState('');
-    const [managersList, setManagersList] = useState<any[]>([]);
-    const tg = window.Telegram?.WebApp;
+    const [newManagerNote, setNewManagerNote] = useState('');
+    const [managerMsg, setManagerMsg] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [payoutMsg, setPayoutMsg] = useState<{ [id: number]: string }>({});
 
-    useEffect(() => { fetchData(); }, []);
+    useEffect(() => { fetchAll(); }, []);
 
-    const fetchData = async () => {
+    const fetchAll = async () => {
         setLoading(true);
-
-        const { data: allUsers } = await supabase
-            .from('users')
-            .select('telegram_id, username, referrer_id, balance, role, created_at');
-
-        if (allUsers) {
-            const uMap: Record<string, any> = {};
-            allUsers.forEach((u: any) => {
-                uMap[u.telegram_id] = { ...u, invitedCount: 0 };
-            });
-
-            allUsers.forEach((u: any) => {
-                if (u.referrer_id && uMap[u.referrer_id]) {
-                    uMap[u.referrer_id].invitedCount++;
-                }
-            });
-
-            const sortedUsers = Object.values(uMap)
-                .filter((u: any) => u.invitedCount > 0 || (u.balance || 0) > 0)
-                .sort((a: any, b: any) => b.invitedCount - a.invitedCount);
-
-            setUsersInfo(sortedUsers);
-        }
-
-        const { data: mUsers } = await supabase.from('users').select('*').in('role', ['manager', 'founder']);
-        if (mUsers) setManagersList(mUsers);
-
+        await Promise.all([fetchStats(), fetchReferralRows(), fetchManagers()]);
         setLoading(false);
     };
 
-    const handleAddManager = async () => {
-        if (!newManagerId) return;
-        const tgId = parseInt(newManagerId);
-        const { data: existingUser } = await supabase.from('users').select('*').eq('telegram_id', tgId).single();
-        if (!existingUser) {
-            tg?.showAlert(t.managerAddError);
+    const fetchStats = async () => {
+        const { count: uCount } = await supabase.from('users').select('*', { count: 'exact', head: true });
+        setStats({ totalUsers: uCount || 0 });
+    };
+
+    const fetchReferralRows = async () => {
+        // 1. Get all users who have been referred (have referrer_id set)
+        const { data: invitedUsers } = await supabase
+            .from('users')
+            .select('telegram_id, username, referrer_id')
+            .not('referrer_id', 'is', null);
+
+        if (!invitedUsers || invitedUsers.length === 0) return;
+
+        // 2. Get unique referrer IDs
+        const referrerIds = [...new Set(invitedUsers.map((u: any) => u.referrer_id))];
+
+        // 3. Fetch referrer profiles
+        const { data: referrers } = await supabase
+            .from('users')
+            .select('telegram_id, username, balance, note')
+            .in('telegram_id', referrerIds);
+
+        if (!referrers) return;
+
+        // 4. Fetch all payout history for these referrers in one query
+        const { data: allPayouts } = await supabase
+            .from('chat_history')
+            .select('user_id, content, created_at')
+            .in('user_id', referrerIds)
+            .like('content', `${PAYOUT_PREFIX}%`)
+            .order('created_at', { ascending: false });
+
+        // 5. Build rows
+        const rows = referrers.map((ref: any) => {
+            const myInvitees = invitedUsers.filter((u: any) => u.referrer_id === ref.telegram_id);
+            const myPayouts = (allPayouts || []).filter((p: any) => p.user_id === ref.telegram_id);
+            const totalPaid = myPayouts.reduce((sum: number, p: any) => {
+                const match = p.content.match(/\$?([\d.]+)/);
+                return sum + (match ? parseFloat(match[1]) : 0);
+            }, 0);
+
+            return {
+                telegram_id: ref.telegram_id,
+                username: ref.username,
+                balance: ref.balance || 0,
+                invitedCount: myInvitees.length,
+                totalPaid,
+                note: ref.note || '',
+                payouts: myPayouts
+            };
+        });
+
+        setReferralRows(rows);
+    };
+
+    const fetchManagers = async () => {
+        const { data } = await supabase.from('users').select('telegram_id, username, role, note').in('role', ['manager', 'founder']);
+        setManagers(data || []);
+    };
+
+    const handlePayout = async (ref: any) => {
+        if (ref.balance <= 0) {
+            setPayoutMsg(prev => ({ ...prev, [ref.telegram_id]: '⚠️ Баланс равен 0' }));
             return;
         }
-        const { error } = await supabase.from('users').update({ role: 'manager' }).eq('telegram_id', tgId);
-        if (!error) {
-            setManagersList(prev => {
-                if (prev.find(m => m.telegram_id === tgId)) return prev;
-                return [...prev, { ...existingUser, role: 'manager' }];
-            });
-            tg?.showAlert(t.managerAddSuccess?.replace('{id}', String(tgId)) || 'Успешно!');
-            setNewManagerId('');
-        } else {
-            tg?.showAlert(t.managerAddFail);
-        }
+        const amount = ref.balance;
+        // Zero out balance
+        await supabase.from('users').update({ balance: 0 }).eq('telegram_id', ref.telegram_id);
+        // Log payout in chat_history
+        await supabase.from('chat_history').insert({
+            user_id: ref.telegram_id,
+            role: 'assistant',
+            content: `${PAYOUT_PREFIX} $${amount} — выплачено ${new Date().toLocaleDateString('ru-RU')}`
+        });
+        setPayoutMsg(prev => ({ ...prev, [ref.telegram_id]: `✅ Выплачено $${amount}` }));
+        fetchReferralRows();
     };
 
-    const handleRemoveManager = async (tgId: number) => {
-        const { error } = await supabase.from('users').update({ role: 'client' }).eq('telegram_id', tgId);
-        if (!error) {
-            setManagersList(prev => prev.filter(m => m.telegram_id !== tgId));
-            tg?.showAlert(t.managerRemoveSuccess?.replace('{id}', String(tgId)) || 'Удален.');
-        }
+    const handleAddManager = async () => {
+        if (!newManagerId || isNaN(parseInt(newManagerId))) return;
+        const id = parseInt(newManagerId);
+        const { data: existing } = await supabase.from('users').select('*').eq('telegram_id', id).single();
+        if (!existing) { setManagerMsg(t.managerAddError || '❌ Пользователь не найден.'); return; }
+        await supabase.from('users').update({ role: 'manager', note: newManagerNote }).eq('telegram_id', id);
+        setManagerMsg((t.managerAddSuccess || '✅ ID {id} теперь Менеджер.').replace('{id}', String(id)));
+        setNewManagerId('');
+        setNewManagerNote('');
+        fetchManagers();
     };
 
-    const handleMarkPaid = async (tgId: number, currentBalance: number) => {
-        if (!window.confirm(`Выплатить $${currentBalance.toFixed(2)} пользователю?\nБаланс будет обнулен.`)) return;
-        const { error } = await supabase.from('users').update({ balance: 0 }).eq('telegram_id', tgId);
-        if (!error) {
-            alert('Выплата зафиксирована!');
-            fetchData();
-        }
+    const handleUpdateNote = async (tgId: number, newNote: string) => {
+        await supabase.from('users').update({ note: newNote }).eq('telegram_id', tgId);
+        fetchAll();
     };
+
+    const handleRemoveManager = async (id: number) => {
+        await supabase.from('users').update({ role: 'user' }).eq('telegram_id', id);
+        setManagerMsg((t.managerRemoveSuccess || '🗑️ Сотрудник {id} удалён.').replace('{id}', String(id)));
+        fetchManagers();
+    };
+
+    if (loading) return <div className="text-center py-20 opacity-50 animate-pulse">{t.analyzing || 'Анализ данных...'}</div>;
 
     return (
-        <div className="space-y-6">
-            {/* Manager Management */}
-            <section className="space-y-4 border-b border-white/5 pb-6">
-                <h3 className="text-lg font-headline font-bold text-on-surface flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">engineering</span>
-                    {t.manageManagers}
-                </h3>
-                <div className="glass-card p-4 rounded-xl space-y-3">
-                    <div className="flex gap-2">
-                        <input
-                            type="number"
-                            value={newManagerId}
-                            onChange={(e) => setNewManagerId(e.target.value)}
-                            className="flex-1 bg-surface-container-lowest border border-outline-variant/20 rounded-lg px-4 min-h-[42px] text-sm text-on-surface focus:outline-none focus:border-primary/50"
-                            placeholder={t.enterTgId}
-                        />
-                        <button onClick={handleAddManager} className="w-[42px] h-[42px] bg-primary/20 text-primary border border-primary/30 flex items-center justify-center rounded-lg active:scale-95">
-                            <span className="material-symbols-outlined">add</span>
-                        </button>
-                    </div>
+        <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 gap-4">
+                <div className="bg-[#1a1a1d] p-5 rounded-3xl border border-white/5 flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t.statsTotalUsers}</p>
+                    <p className="text-3xl font-black text-white">{stats.totalUsers}</p>
+                </div>
+            </div>
 
-                    {managersList.length > 0 && (
-                        <div className="pt-3 mt-3 border-t border-outline-variant/10 space-y-2">
-                            <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">{t.activeEmployees}</p>
-                            {managersList.map((m) => (
-                                <div key={m.telegram_id} className="flex justify-between items-center bg-surface-container-lowest p-2 px-3 rounded-lg border border-outline-variant/10">
-                                    <div className="flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-[16px] text-tertiary">{m.role === 'founder' ? 'shield_person' : 'badge'}</span>
-                                        <span className="text-sm text-on-surface font-medium truncate w-36">@{m.username || String(m.telegram_id)}</span>
-                                        {m.role === 'founder' && <span className="text-[8px] uppercase tracking-widest bg-primary/20 text-primary px-1.5 py-0.5 rounded-sm font-bold">{t.ownerBadge}</span>}
+
+            {/* Referral Analytics + Payouts */}
+            {referralRows.length > 0 && (
+                <div className="bg-[#1a1a1d] rounded-3xl border border-white/5 overflow-hidden">
+                    <div className="px-5 py-4 border-b border-white/5 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary text-[18px]">payments</span>
+                        <h3 className="text-sm font-bold text-slate-200">Реферальная аналитика и выплаты</h3>
+                    </div>
+                    <div className="divide-y divide-white/5">
+                        {referralRows.map(ref => (
+                            <div key={ref.telegram_id} className="p-4 space-y-3">
+                                {/* Header row */}
+                                <div className="flex items-start gap-4">
+                                    <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center flex-shrink-0 border border-primary/20">
+                                        <span className="material-symbols-outlined text-primary text-[24px]">person</span>
                                     </div>
-                                    {m.role !== 'founder' && (
-                                        <button onClick={() => handleRemoveManager(m.telegram_id)} className="text-error hover:bg-error/10 p-1.5 rounded-md transition-colors active:scale-95">
-                                            <span className="material-symbols-outlined text-[16px]">person_remove</span>
-                                        </button>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <p className="text-base font-black text-white truncate">@{ref.username}</p>
+                                            <span className="bg-white/5 text-[9px] font-mono text-slate-500 px-2 py-0.5 rounded-md border border-white/5">{ref.telegram_id}</span>
+                                        </div>
+                                        {/* Premium Tag Input */}
+                                        <div className="relative group max-w-[200px]">
+                                            <div className="absolute inset-y-0 left-0 w-1 bg-primary rounded-full opacity-0 group-focus-within:opacity-100 transition-all blur-[2px]" />
+                                            <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-3 py-1.5 hover:bg-primary/10 transition-all">
+                                                <span className="material-symbols-outlined text-[14px] text-primary/60">label</span>
+                                                <input 
+                                                    className="text-[11px] font-bold text-primary bg-transparent border-none outline-none w-full placeholder:text-primary/30"
+                                                    placeholder="Подпись партнёра..."
+                                                    defaultValue={ref.note}
+                                                    onBlur={(e) => handleUpdateNote(ref.telegram_id, e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-xl font-black text-primary tracking-tighter">${ref.balance}</p>
+                                        <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest">баланс</p>
+                                    </div>
+                                </div>
+
+                                {/* Stats row */}
+                                <div className="grid grid-cols-1 gap-2">
+                                    {[
+                                        { label: 'Приглашено друзей', value: ref.invitedCount, color: 'text-blue-400' },
+                                    ].map(s => (
+                                        <div key={s.label} className="bg-black/20 p-2 rounded-xl text-center">
+                                            <p className={`text-base font-black ${s.color}`}>{s.value}</p>
+                                            <p className="text-[9px] text-slate-600 uppercase">{s.label}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Payout button + history */}
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => handlePayout(ref)}
+                                        disabled={ref.balance <= 0}
+                                        className="flex-1 py-2.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                        💸 Выплатить ${ref.balance}
+                                    </button>
+                                    {ref.totalPaid > 0 && (
+                                        <div className="px-3 py-2.5 bg-black/20 rounded-xl text-center min-w-[80px]">
+                                            <p className="text-[10px] font-black text-slate-400">${ref.totalPaid.toFixed(0)}</p>
+                                            <p className="text-[8px] text-slate-600 uppercase">выплачено</p>
+                                        </div>
                                     )}
                                 </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </section>
 
-            {/* Global Stats */}
-            <section className="grid grid-cols-2 gap-3">
-                <div className="bg-[#201f22] p-4 rounded-xl flex flex-col justify-between min-h-[100px] border border-white/5">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="bg-primary/10 p-1.5 rounded-lg"><span className="material-symbols-outlined text-primary text-[18px]">group</span></div>
-                        <p className="text-on-surface-variant text-[10px] font-bold uppercase tracking-wider">{t.totalUsers}</p>
-                    </div>
-                    <span className="text-3xl font-headline font-extrabold text-on-surface">{globalStats.totalUsers}</span>
-                </div>
-                <div className="bg-[#201f22] p-4 rounded-xl flex flex-col justify-between min-h-[100px] border border-white/5">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="bg-secondary/10 p-1.5 rounded-lg"><span className="material-symbols-outlined text-secondary text-[18px]">person_add</span></div>
-                        <p className="text-on-surface-variant text-[10px] font-bold uppercase tracking-wider">{t.totalReferrals}</p>
-                    </div>
-                    <span className="text-3xl font-headline font-extrabold text-on-surface">{globalStats.totalReferrals}</span>
-                </div>
-            </section>
+                                {/* Payout feedback */}
+                                {payoutMsg[ref.telegram_id] && (
+                                    <p className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 p-2 rounded-xl">{payoutMsg[ref.telegram_id]}</p>
+                                )}
 
-            {/* Users / Referral Activity */}
-            <section>
-                <h3 className="text-sm font-bold text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[18px] text-secondary">leaderboard</span>
-                    {t.tabUsers}
+
+                                {/* Payout history */}
+                                {ref.payouts.length > 0 && (
+                                    <details className="text-[10px]">
+                                        <summary className="text-slate-500 cursor-pointer hover:text-slate-300 font-bold uppercase tracking-wider">История выплат ({ref.payouts.length})</summary>
+                                        <div className="mt-2 space-y-1 pl-2">
+                                            {ref.payouts.map((p: any, i: number) => (
+                                                <p key={i} className="text-slate-400 font-mono">{p.content.replace(PAYOUT_PREFIX, '').trim()}</p>
+                                            ))}
+                                        </div>
+                                    </details>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Manager Management */}
+            <div className="bg-[#1a1a1d] p-5 rounded-3xl border border-white/5 space-y-4">
+                <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-secondary text-[18px]">manage_accounts</span>
+                    {t.manageManagers || 'Управление Менеджерами'}
                 </h3>
-                {loading ? (
-                    <div className="text-center p-4 animate-pulse text-on-surface-variant">{t.analyzing}</div>
-                ) : (
-                    <div className="flex flex-col gap-3">
-                        {usersInfo.length === 0 && <p className="text-sm text-center text-on-surface-variant py-4">{t.noActivity}</p>}
-                        {usersInfo.slice(0, isUsersExpanded ? undefined : 6).map(u => (
-                            <div key={u.telegram_id} className="glass-card p-4 rounded-xl space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="font-headline font-semibold text-on-surface text-sm">{u.username ? `@${u.username}` : String(u.telegram_id)}</p>
-                                        <div className="flex gap-3 text-[10px] text-on-surface-variant uppercase mt-1">
-                                            <span>{t.invitedLabelStats} <b className="text-primary">{u.invitedCount}</b></span>
+                <div className="space-y-4">
+                    <div className="flex gap-3">
+                        <div className="flex-1 relative">
+                            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-[18px]">fingerprint</span>
+                            <input
+                                type="number"
+                                value={newManagerId}
+                                onChange={e => setNewManagerId(e.target.value)}
+                                placeholder={t.enterTgId || 'Telegram ID'}
+                                className="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-4 text-sm font-bold text-white outline-none focus:border-primary/50 transition-all placeholder:text-slate-600"
+                            />
+                        </div>
+                        <button onClick={handleAddManager} className="px-6 py-4 bg-primary text-black rounded-2xl text-xs font-black uppercase tracking-widest hover:brightness-110 transition-all active:scale-95 flex items-center gap-2">
+                            {t.assignEmployee || 'Добавить'}
+                        </button>
+                    </div>
+                    <div className="relative">
+                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-[18px]">edit_note</span>
+                        <input
+                            type="text"
+                            value={newManagerNote}
+                            onChange={e => setNewManagerNote(e.target.value)}
+                            placeholder="Личная заметка к сотруднику (подпись)..."
+                            className="w-full bg-black/40 border border-white/10 rounded-2xl pl-11 pr-4 py-4 text-sm font-bold text-white outline-none focus:border-secondary/50 transition-all placeholder:text-slate-600"
+                        />
+                    </div>
+                </div>
+                {managerMsg && <p className="text-xs text-primary/80 bg-primary/10 border border-primary/20 p-3 rounded-xl">{managerMsg}</p>}
+                {managers.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-white/5">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t.activeEmployees || 'Сотрудники'}</p>
+                        {managers.map(m => (
+                            <div key={m.telegram_id} className="flex items-center justify-between bg-white/[0.02] p-4 rounded-2xl border border-white/5 transition-all hover:bg-white/[0.04]">
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <p className="text-sm font-black text-slate-200">@{m.username || '—'}</p>
+                                        <span className="bg-white/5 text-[8px] font-mono text-slate-600 px-1.5 py-0.5 rounded border border-white/5">{m.telegram_id}</span>
+                                    </div>
+                                    <div className="relative group max-w-[200px]">
+                                        <div className="absolute inset-y-0 left-0 w-0.5 bg-secondary rounded-full opacity-0 group-focus-within:opacity-100 transition-all blur-[1px]" />
+                                        <div className="flex items-center gap-2 bg-secondary/5 border border-secondary/20 rounded-xl px-3 py-1.5">
+                                            <span className="material-symbols-outlined text-[14px] text-secondary/60">badge</span>
+                                            <input 
+                                                className="text-[11px] font-bold text-secondary bg-transparent border-none outline-none w-full placeholder:text-secondary/30"
+                                                placeholder="Подпись менеджера..."
+                                                defaultValue={m.note}
+                                                onBlur={(e) => handleUpdateNote(m.telegram_id, e.target.value)}
+                                            />
                                         </div>
                                     </div>
-                                    {(u.balance || 0) > 0 && (
-                                        <div className="text-right">
-                                            <p className="text-[10px] text-on-surface-variant uppercase">{t.balance}</p>
-                                            <p className="font-headline font-bold text-green-400">${(u.balance || 0).toFixed(2)}</p>
-                                            <button onClick={() => handleMarkPaid(u.telegram_id, u.balance)} className="mt-1 bg-tertiary/20 text-tertiary border border-tertiary/30 px-2 py-0.5 text-[9px] rounded font-bold uppercase active:scale-95">
-                                                Выплатить
-                                            </button>
-                                        </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    {m.role === 'founder' && (
+                                        <span className="text-[9px] font-black px-2 py-1 rounded-lg uppercase bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
+                                            {t.ownerBadge || 'Владелец'}
+                                        </span>
+                                    )}
+                                    {m.role !== 'founder' && (
+                                        <button onClick={() => handleRemoveManager(m.telegram_id)} className="w-9 h-9 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all flex items-center justify-center border border-red-500/20">
+                                            <span className="material-symbols-outlined text-[18px]">person_remove</span>
+                                        </button>
                                     )}
                                 </div>
                             </div>
                         ))}
-
-                        {usersInfo.length > 6 && (
-                            <button onClick={() => setIsUsersExpanded(!isUsersExpanded)} className="w-full py-3 bg-surface-container-high rounded-xl text-primary text-sm font-bold active:scale-95 border border-white/5">
-                                {isUsersExpanded ? t.hideAll : t.showAll.replace('{count}', usersInfo.length)}
-                            </button>
-                        )}
                     </div>
                 )}
-            </section>
+            </div>
         </div>
     );
-}
+};
+
+export default AdminStats;
