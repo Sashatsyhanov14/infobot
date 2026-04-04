@@ -481,7 +481,7 @@ if (loading) return (
   }
 
   const isOwner = user?.role === 'founder' || user?.role === 'manager';
-  const botUsername = window.Telegram?.WebApp?.initDataUnsafe?.receiver?.username || 'Emedeotour_bot';
+  const botUsername = window.Telegram?.WebApp?.initDataUnsafe?.receiver?.username || 'aiemedeoapp_bot';
   const refLink = user?.telegram_id ? `https://t.me/${botUsername}?start=${user.telegram_id}` : '';
 
   const renderContent = () => {
