@@ -206,7 +206,8 @@ const App: React.FC = () => {
           username: username || firstName || tgUser?.first_name || `user_${tgId}`,
           balance: 0,
           role: 'user',
-          invited_count: 0
+          invited_count: 0,
+          created_at: new Date().toISOString()
         };
         const { data: created, error: regError } = await supabase.from('users').insert(newUser).select().single();
         if (regError) {
@@ -253,30 +254,32 @@ const App: React.FC = () => {
         tg.expand();
       }
 
+      // 1. Check URL parameters first (most reliable if coming from bot button)
       const params = new URLSearchParams(window.location.search);
       const uid = params.get('uid');
-      
       if (uid && !isNaN(parseInt(uid))) {
         await fetchUserData(parseInt(uid));
-        // If we have an excursion ID, keep the catalog tab active
         return;
       }
 
-      // 2. Try Telegram SDK Polling
+      // 2. Try to get ID from Telegram WebApp SDK with more retries
       let tgUser: any = null;
-      for (let i = 0; i < 5; i++) {
-        tgUser = tg?.initDataUnsafe?.user;
+      for (let i = 0; i < 15; i++) { // Increased retries to 3 seconds
+        tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
         if (tgUser?.id) break;
+        
+        // Try parsing initData if object is missing
+        if (window.Telegram?.WebApp?.initData) {
+          try {
+            const paramsRaw = new URLSearchParams(window.Telegram.WebApp.initData);
+            const userStr = paramsRaw.get('user');
+            if (userStr) {
+               tgUser = JSON.parse(decodeURIComponent(userStr));
+               if (tgUser?.id) break;
+            }
+          } catch(e) {}
+        }
         await new Promise(r => setTimeout(r, 200));
-      }
-
-      // 3. Try Raw initData Parsing
-      if (!tgUser?.id && tg?.initData) {
-        try {
-          const paramsRaw = new URLSearchParams(tg.initData);
-          const userStr = paramsRaw.get('user');
-          if (userStr) tgUser = JSON.parse(decodeURIComponent(userStr));
-        } catch {}
       }
 
       if (tgUser?.id) {
@@ -285,6 +288,7 @@ const App: React.FC = () => {
         setLang(userLang as any);
         await fetchUserData(tgUser.id, tgUser.first_name, tgUser.username);
       } else {
+        // Only stop loading if we truly can't find a user
         setLoading(false);
       }
     };
@@ -324,10 +328,16 @@ if (loading) return (
               className="w-full bg-[#1a1a1d] border border-white/10 rounded-2xl p-4 text-center text-lg focus:border-primary/50 outline-none transition-all"
             />
             <button
-              onClick={() => { if (loginInputId) fetchUserData(parseInt(loginInputId)); }}
-              className="w-full bg-primary/20 text-primary border border-primary/30 py-4 rounded-2xl font-bold hover:bg-primary/30 transition-all active:scale-95 shadow-lg shadow-primary/5"
+              disabled={loading || !loginInputId}
+              onClick={async () => { 
+                if (loginInputId) {
+                  const id = parseInt(loginInputId);
+                  if (!isNaN(id)) await fetchUserData(id); 
+                }
+              }}
+              className="w-full bg-primary/20 text-primary border border-primary/30 py-4 rounded-2xl font-bold hover:bg-primary/30 transition-all active:scale-95 shadow-lg shadow-primary/5 disabled:opacity-50"
             >
-              {t.loginBtn}
+              {loading ? (lang === 'ru' ? 'Загрузка...' : 'Loading...') : t.loginBtn}
             </button>
           </div>
         </div>
@@ -336,7 +346,8 @@ if (loading) return (
   }
 
   const isOwner = user.role === 'founder' || user.role === 'manager';
-  const refLink = `https://t.me/Emedeotour_bot?start=${user.telegram_id}`;
+  const botUsername = window.Telegram?.WebApp?.initDataUnsafe?.receiver?.username || 'Emedeotour_bot';
+  const refLink = `https://t.me/${botUsername}?start=${user.telegram_id}`;
 
   const renderContent = () => {
     switch (activeTab) {
@@ -436,7 +447,7 @@ if (loading) return (
                 <button
                   onClick={() => {
                     // openTelegramLink triggers the bot with a start payload — most reliable method
-                    const link = `https://t.me/Emedeotour_bot?start=getqr_${user.telegram_id}`;
+                    const link = `https://t.me/${botUsername}?start=getqr_${user.telegram_id}`;
                     try {
                       tg?.openTelegramLink(link);
                     } catch {
