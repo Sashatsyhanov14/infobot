@@ -156,10 +156,10 @@ bot.start(async (ctx) => {
         const lang = ctx.from.language_code || 'ru';
         userLangCache[telegramId] = lang;
 
-        const welcomeRuPart1 = `Привет, ${username}! 🌍\n\nЯ твой персональный гид — помогу выбрать лучшую экскурсию, расскажу о маршрутах и отвечу на любые вопросы.\n\nОткрой каталог ниже или просто напиши: какой город тебя интересует? 🗺️`;
+        const welcomeRuPart1 = `Привет, ${username}! 👋\n\nЯ твой интеллектуальный ассистент. Я знаю всё о нашем проекте и готов ответить на любые твои вопросы!\n\nПросто напиши, что тебя интересует, или загляни в личный кабинет за бонусами. 🎁`;
 
         const welcomeText1 = await getLocalizedText(lang, welcomeRuPart1);
-        const webappBtnRu = '🎒 Открыть Каталог';
+        const webappBtnRu = '💎 Личный Кабинет';
         const qrBtnRu = '📲 Мой QR / Промокод';
         const webappBtn = await getLocalizedText(lang, webappBtnRu);
         const qrBtn = await getLocalizedText(lang, qrBtnRu);
@@ -183,7 +183,7 @@ bot.start(async (ctx) => {
         // Задержанное 2-е сообщение
         setTimeout(async () => {
             try {
-                const welcomeRuPart2 = `📍 Мы работаем в нескольких городах России: Москва, Санкт-Петербург, Сочи, Казань и другие.\n\nПросто напиши название города — и я покажу, что у нас есть! Или открой каталог и выбери экскурсию прямо там 👆`;
+                const welcomeRuPart2 = `💡 Ты можешь спрашивать меня о чем угодно! Я помогу разобраться в деталях, правилах и бонусной системе.\n\nА если пригласишь друзей по своей ссылке — получишь бонусы на баланс! Попробуй прямо сейчас. 👇`;
                 const welcomeText2 = await getLocalizedText(lang, welcomeRuPart2);
                 await bot.telegram.sendMessage(telegramId, welcomeText2);
                 console.log(`[START] Welcome Part 2 sent to ${username}`);
@@ -662,13 +662,11 @@ bot.on('text', async (ctx) => {
         const { data: excursions } = await getExcursions();
         const { data: faqRows } = await getFaq();
 
-        const faqText = faqRows ? faqRows.map(f => `- ${f.topic}: ${f.content_ru}`).join('\n') : '';
-
         try { await ctx.sendChatAction('typing'); } catch (e) { }
 
-        const aiResponse = await getChatResponse(excursions, faqText, history, userText);
+        const aiResponse = await getChatResponse(excursions, faqRows, history, userText);
 
-        const langMatch = aiResponse.match(/\[LANG:\s*(ru|tr|en)\]/i);
+        const langMatch = aiResponse.match(/\[LANG:\s*([a-z]{2})\]/i);
         if (langMatch) userLangCache[telegramId] = langMatch[1].toLowerCase();
 
         const bookMatch = aiResponse.match(/\[BOOK_REQUEST:\s*([a-zA-Z0-9_-]+)\]/i);

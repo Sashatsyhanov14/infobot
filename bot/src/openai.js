@@ -15,12 +15,12 @@ const openai = new OpenAI({
 });
 
 module.exports = {
-    async getChatResponse(excursions, faqText, history, userMessage) {
+    async getChatResponse(excursions, faqRows, history, userMessage) {
         try {
             // === АГЕНТ 0: ПОИСК (Search Agent) ===
             const searchMessages = [
                 { role: 'system', content: SEARCH_AGENT_PROMPT },
-                ...history.slice(-2), // Берем последние 2 сообщения для контекста поиска
+                ...history.slice(-2),
                 { role: 'user', content: userMessage }
             ];
 
@@ -38,27 +38,12 @@ module.exports = {
                 searchParams = { search_query: null, city: null, category: null, type: 'general' };
             }
 
-            // === ФИЛЬТРАЦИЯ ДАННЫХ (Retriever Logic) ===
-            let filteredItems = excursions;
-            let filteredFaq = faqText;
-
-            if (searchParams.type === 'item') {
-                filteredItems = excursions.filter(e => {
-                    const matchCity = !searchParams.city || e.city?.toLowerCase().includes(searchParams.city.toLowerCase());
-                    const matchQuery = !searchParams.search_query || e.title?.toLowerCase().includes(searchParams.search_query.toLowerCase());
-                    return matchCity && matchQuery;
-                }).slice(0, 5); // Ограничиваем, чтобы не раздувать контекст
-            } else if (searchParams.type === 'faq' && faqText) {
-                // Простейший поиск по FAQ (по строкам)
-                const faqLines = faqText.split('\n');
-                filteredFaq = faqLines.filter(line => 
-                    !searchParams.search_query || line.toLowerCase().includes(searchParams.search_query.toLowerCase())
-                ).join('\n');
-            }
-
             // === АГЕНТ 1: АНАЛИТИК (Analyzer) ===
+            // Предварительная фильтрация для Аналитика (только RU для понимания контекста)
+            const analystFaq = faqRows ? faqRows.map(f => `- ${f.topic}: ${f.content_ru || f.answer_ru}`).join('\n') : '';
+            
             const analyzerMessages = [
-                { role: 'system', content: ANALYZER_PROMPT(filteredItems) },
+                { role: 'system', content: ANALYZER_PROMPT(excursions) },
                 ...history,
                 { role: 'user', content: userMessage }
             ];
@@ -75,15 +60,32 @@ module.exports = {
                 const cleanJsonStr = rawJsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
                 analysis = JSON.parse(cleanJsonStr);
             } catch (e) {
-                analysis = { lang_code: 'ru', intent: 'general', item_id: null, writer_instruction: 'Ответь на запрос.' };
+                analysis = { lang_code: 'ru', intent: 'general', writer_instruction: 'Ответь на запрос.' };
+            }
+
+            // === РЕТРИВЕР (Localized Data Retrieval) ===
+            const langCode = analysis.lang_code || 'ru';
+            let filteredFaq = '';
+            if (faqRows && (analysis.intent === 'faq' || searchParams.type === 'faq')) {
+                // Ищем наиболее релевантные строки из FAQ на языке пользователя
+                filteredFaq = faqRows
+                    .filter(f => {
+                        const query = (searchParams.search_query || userMessage).toLowerCase();
+                        return f.topic.toLowerCase().includes(query) || (f.content_ru || '').toLowerCase().includes(query);
+                    })
+                    .map(f => {
+                        const content = f[`answer_${langCode}`] || f[`content_${langCode}`] || f.content_ru || f.answer_ru;
+                        return `- ${f.topic}: ${content}`;
+                    })
+                    .join('\n');
             }
 
             // === АГЕНТ 2: ПИСАТЕЛЬ (Writer) ===
             const writerMessages = [
-                { role: 'system', content: WRITER_PROMPT(filteredItems, filteredFaq) },
+                { role: 'system', content: WRITER_PROMPT(excursions, filteredFaq) },
                 {
                     role: 'user',
-                    content: `Инструкции от Аналитика:\nНамерение: ${analysis.intent}\nИнструкция: ${analysis.writer_instruction}`
+                    content: `Инструкции от Аналитика:\nЯзык клиента: ${langCode}\nНамерение: ${analysis.intent}\nИнструкция: ${analysis.writer_instruction}`
                 }
             ];
 
@@ -97,21 +99,21 @@ module.exports = {
 
             // === АГЕНТ 3: ПЕРЕВОДЧИК (Translator) ===
             let finalMessage = russianMessage;
-            if (analysis.lang_code !== 'ru') {
+            if (langCode !== 'ru') {
                 const translatorResponse = await openai.chat.completions.create({
-                    model: 'openai/gpt-4o-mini',
+                    model: 'google/gemini-2.0-flash-lite-001:free',
                     messages: [
                         { role: 'system', content: LOCALIZER_PROMPT },
-                        { role: 'user', content: `Целевой язык: ${analysis.lang_code}\nТекст:\n${russianMessage}` }
+                        { role: 'user', content: `Целевой язык: ${langCode}\nТекст:\n${russianMessage}` }
                     ],
                     temperature: 0.2
                 });
                 finalMessage = translatorResponse.choices[0].message.content.trim();
             }
 
-            let embeddedTags = `[LANG:${analysis.lang_code}]`;
-            if (analysis.intent === 'sale' && (analysis.item_id || analysis.excursion_id)) {
-                embeddedTags += `\n[BOOK_REQUEST: ${analysis.item_id || analysis.excursion_id}]`;
+            let embeddedTags = `[LANG:${langCode}]`;
+            if (analysis.intent === 'sale' && analysis.item_id) {
+                embeddedTags += `\n[BOOK_REQUEST: ${analysis.item_id}]`;
             }
 
             return finalMessage + '\n' + embeddedTags;
@@ -163,7 +165,7 @@ ${history.slice(-5).map(h => `${h.role === 'user' ? 'Клиент' : 'Бот'}: 
         if (!langCode || langCode === 'ru') return russianText;
         try {
             const response = await openai.chat.completions.create({
-                model: 'openai/gpt-4o-mini',
+                model: 'google/gemini-2.0-flash-lite-001:free',
                 messages: [
                     { role: 'system', content: LOCALIZER_PROMPT },
                     { role: 'user', content: `Целевой язык: ${langCode}\nТекст:\n${russianText}` }
