@@ -345,9 +345,9 @@ if (loading) return (
     );
   }
 
-  const isOwner = user.role === 'founder' || user.role === 'manager';
+  const isOwner = user?.role === 'founder' || user?.role === 'manager';
   const botUsername = window.Telegram?.WebApp?.initDataUnsafe?.receiver?.username || 'Emedeotour_bot';
-  const refLink = `https://t.me/${botUsername}?start=${user.telegram_id}`;
+  const refLink = user?.telegram_id ? `https://t.me/${botUsername}?start=${user.telegram_id}` : '';
 
   const renderContent = () => {
     switch (activeTab) {
@@ -528,7 +528,16 @@ if (loading) return (
         </div>
       </header>
 
-      <main className="px-4 max-w-2xl mx-auto">{renderContent()}</main>
+      <main className="px-4 max-w-2xl mx-auto">
+        {(() => {
+          try {
+            return renderContent();
+          } catch (e) {
+            console.error("Render Error:", e);
+            return <div className="p-10 text-center text-red-400">Ошибка отображения. Пожалуйста, перезапустите приложение.</div>;
+          }
+        })()}
+      </main>
 
       {/* Nav */}
       <nav className="fixed bottom-4 left-4 right-4 z-50 flex justify-around items-center px-2 py-2 bg-[#1a1a1d]/90 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl">

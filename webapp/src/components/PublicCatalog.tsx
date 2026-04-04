@@ -86,9 +86,10 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
     };
 
     const filtered = excursions.filter(ex => {
-        const title = (lang === 'ru' ? ex.title : (ex as any)[`title_${lang}`]) || ex.title;
-        const city = (lang === 'ru' ? ex.city : (ex as any)[`city_${lang}`]) || ex.city;
-        return title.toLowerCase().includes(search.toLowerCase()) || city.toLowerCase().includes(search.toLowerCase());
+        const title = ((lang === 'ru' ? ex.title : (ex as any)[`title_${lang}`]) || ex.title || '').toLowerCase();
+        const city = ((lang === 'ru' ? ex.city : (ex as any)[`city_${lang}`]) || ex.city || '').toLowerCase();
+        const s = (search || '').toLowerCase();
+        return title.includes(s) || city.includes(s);
     });
 
     if (loading) return <div className="text-center p-10 animate-pulse text-slate-400">Загрузка каталога...</div>;
