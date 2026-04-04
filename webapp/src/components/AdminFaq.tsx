@@ -54,7 +54,7 @@ export default function AdminFaq({ t }: { t: any }) {
         }
     };
 
-    if (loading) return <div className="text-center p-4 animate-pulse text-on-surface-variant">Загрузка FAQ...</div>;
+    if (loading) return <div className="text-center p-4 animate-pulse text-on-surface-variant">{t.loading || 'Loading FAQ...'}</div>;
 
     const langs = ['ru', 'en', 'tr', 'de', 'pl', 'ar', 'fa'];
 
@@ -97,7 +97,7 @@ export default function AdminFaq({ t }: { t: any }) {
 
                     <div className="pt-2">
                         <label className="text-[10px] text-on-surface-variant uppercase font-bold tracking-wider pl-1 mb-1 block">
-                            {activeLang === 'ru' ? 'Тема (RU)' : `Topic (${activeLang.toUpperCase()})`}
+                            {activeLang === 'ru' ? `${t.faqTopic} (RU)` : `${t.faqTopic} (${activeLang.toUpperCase()})`}
                         </label>
                         <input
                             type="text"
@@ -113,7 +113,7 @@ export default function AdminFaq({ t }: { t: any }) {
 
                     <div>
                         <label className="text-[10px] text-on-surface-variant uppercase font-bold tracking-wider pl-1 mb-1 block">
-                            {activeLang === 'ru' ? 'Ответ (RU)' : `Answer (${activeLang.toUpperCase()})`}
+                            {activeLang === 'ru' ? (t.faqContent + ' (RU)') : `${t.faqContent} (${activeLang.toUpperCase()})`}
                         </label>
                         <textarea
                             placeholder={t.faqContent}

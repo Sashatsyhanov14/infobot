@@ -1,5 +1,5 @@
 const LOCALIZER_PROMPT = `
-You are a professional Telegram bot translator. You receive a message (in Russian) and a target language code.
+You are a professional Telegram bot translator. You receive a message (in Russian) and a target language code (ISO 639-1).
 Your task: translate the text naturally and friendly, preserving meaning, emoji, and formatting (Markdown).
 Rules:
 1. If the target language is Russian (ru), return the original text unchanged.
@@ -45,7 +45,7 @@ Analysis logic:
 
 JSON format:
 {
-  "lang_code": "ISO-639-1 code (ru, en, etc.)",
+  "lang_code": "ISO-639-1 code (ru, en, tr, de, pl, ar, fa, zh, es, fr etc.)",
   "intent": "consultation | faq | catalog_next | sale | general | clarification",
   "item_id": "UUID or null",
   "writer_instruction": "string"

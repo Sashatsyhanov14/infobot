@@ -84,7 +84,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
             };
         });
 
-        setReferralRows(rows.sort((a,b) => b.invitedCount - a.invitedCount));
+        setReferralRows(rows.sort((a: any, b: any) => b.invitedCount - a.invitedCount));
     };
 
     const fetchManagers = async () => {
@@ -94,7 +94,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
 
     const handlePayout = async (ref: any) => {
         if (ref.balance <= 0) {
-            setPayoutMsg(prev => ({ ...prev, [ref.telegram_id]: '⚠️ Баланс 0' }));
+            setPayoutMsg(prev => ({ ...prev, [ref.telegram_id]: '⚠️ ' + (t.noResults || 'Баланс 0') }));
             return;
         }
         const amount = ref.balance;
@@ -102,9 +102,9 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
         await supabase.from('chat_history').insert({
             user_id: ref.telegram_id,
             role: 'assistant',
-            content: `${PAYOUT_PREFIX} $${amount} — выплачено ${new Date().toLocaleDateString('ru-RU')}`
+            content: `${PAYOUT_PREFIX} $${amount} — Paid ${new Date().toLocaleDateString()}`
         });
-        setPayoutMsg(prev => ({ ...prev, [ref.telegram_id]: `✅ Выплачено $${amount}` }));
+        setPayoutMsg(prev => ({ ...prev, [ref.telegram_id]: (t.payoutSuccess || '✅ Paid').replace('{amount}', String(amount)) }));
         fetchReferralRows();
     };
 
@@ -148,7 +148,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                 </div>
                 <div className="bg-[#1a1a1d] p-4 rounded-2xl border border-white/5 text-center">
                     <p className="text-2xl font-black text-primary">{referralRows.length}</p>
-                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Активных рефереров</p>
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{t.activeReferrers}</p>
                 </div>
             </div>
 
@@ -157,7 +157,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                 <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-primary text-[18px]">database</span>
-                        <h3 className="text-sm font-bold text-slate-200">База пользователей</h3>
+                        <h3 className="text-sm font-bold text-slate-200">{t.userDatabase}</h3>
                     </div>
                     <span className="text-[10px] font-black bg-white/5 px-2 py-0.5 rounded-full text-slate-500 uppercase">{filteredUsers.length}</span>
                 </div>
@@ -166,7 +166,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                 <div className="px-5 py-3 bg-black/20">
                     <input 
                         type="text"
-                        placeholder="Поиск по ID или @username..."
+                        placeholder={t.searchPlaceholder}
                         value={userSearchQuery}
                         onChange={(e) => setUserSearchQuery(e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white outline-none focus:border-primary/50 transition-all"
@@ -184,7 +184,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                                 <div className="flex gap-2 mt-1">
                                     {u.referrer_id && (
                                         <span className="text-[8px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">
-                                            От: {u.referrer_id}
+                                            {t.fromReferrer.replace('{id}', String(u.referrer_id))}
                                         </span>
                                     )}
                                     <span className="text-[8px] bg-white/5 text-slate-600 px-1.5 py-0.5 rounded">
@@ -198,7 +198,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                             </div>
                         </div>
                     )) : (
-                        <p className="p-10 text-center text-xs text-slate-600 uppercase tracking-widest font-black">Ничего не найдено</p>
+                        <p className="p-10 text-center text-xs text-slate-600 uppercase tracking-widest font-black">{t.noResults}</p>
                     )}
                 </div>
             </div>
@@ -209,7 +209,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                 <div className="bg-[#1a1a1d] rounded-3xl border border-white/5 overflow-hidden">
                     <div className="px-5 py-4 border-b border-white/5 flex items-center gap-2">
                         <span className="material-symbols-outlined text-primary text-[18px]">payments</span>
-                        <h3 className="text-sm font-bold text-slate-200">Топ рефереров и Выплаты</h3>
+                        <h3 className="text-sm font-bold text-slate-200">{t.payoutsTitle}</h3>
                     </div>
                     <div className="divide-y divide-white/5">
                         {referralRows.map(ref => (
@@ -227,7 +227,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                                             <span className="material-symbols-outlined text-[12px] text-primary/60">label</span>
                                             <input 
                                                 className="text-[10px] font-bold text-primary bg-transparent border-none outline-none w-full placeholder:text-primary/30"
-                                                placeholder="Заметка..."
+                                                placeholder={t.notePlaceholder}
                                                 defaultValue={ref.note}
                                                 onBlur={(e) => handleUpdateNote(ref.telegram_id, e.target.value)}
                                             />
@@ -235,18 +235,18 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                                     </div>
                                     <div className="text-right">
                                         <p className="text-lg font-black text-primary tracking-tighter">${ref.balance}</p>
-                                        <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest leading-none">баланс</p>
+                                        <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest leading-none">{t.balanceLabel}</p>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-2">
                                     <div className="bg-black/20 p-2 rounded-xl text-center">
                                         <p className={`text-sm font-black text-blue-400`}>{ref.invitedCount}</p>
-                                        <p className="text-[8px] text-slate-600 uppercase">друзей</p>
+                                        <p className="text-[8px] text-slate-600 uppercase">{t.invitedLabel}</p>
                                     </div>
                                     <div className="bg-black/20 p-2 rounded-xl text-center">
                                         <p className={`text-sm font-black text-slate-400`}>${ref.totalPaid.toFixed(0)}</p>
-                                        <p className="text-[8px] text-slate-600 uppercase">выплачено</p>
+                                        <p className="text-[8px] text-slate-600 uppercase">{t.paidLabel}</p>
                                     </div>
                                 </div>
 
@@ -255,7 +255,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                                     disabled={ref.balance <= 0}
                                     className="w-full py-2 bg-green-500/20 text-green-400 border border-green-500/30 rounded-xl text-[10px] font-black uppercase tracking-wider active:scale-95 transition-all disabled:opacity-30"
                                 >
-                                    💸 Выплатить ${ref.balance}
+                                    {t.payoutBtn} ${ref.balance}
                                 </button>
 
                                 {payoutMsg[ref.telegram_id] && (
@@ -264,7 +264,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
 
                                 {ref.payouts.length > 0 && (
                                     <details className="text-[9px]">
-                                        <summary className="text-slate-500 cursor-pointer hover:text-slate-300 font-bold uppercase tracking-wider">История ({ref.payouts.length})</summary>
+                                        <summary className="text-slate-500 cursor-pointer hover:text-slate-300 font-bold uppercase tracking-wider">{t.payoutHistory || 'Payouts'} ({ref.payouts.length})</summary>
                                         <div className="mt-2 space-y-1 pl-2 border-l border-white/5">
                                             {ref.payouts.map((p: any, i: number) => (
                                                 <p key={i} className="text-slate-400 font-mono truncate">{p.content.replace(PAYOUT_PREFIX, '').trim()}</p>
@@ -290,7 +290,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                             type="number"
                             value={newManagerId}
                             onChange={e => setNewManagerId(e.target.value)}
-                            placeholder="UserID"
+                            placeholder={t.enterTgId}
                             className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white outline-none focus:border-primary/50 transition-all"
                         />
                         <button onClick={handleAddManager} className="px-5 py-3 bg-primary text-black rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95">
@@ -301,7 +301,7 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                 {managerMsg && <p className="text-[10px] text-primary/80 bg-primary/10 border border-primary/20 p-3 rounded-xl">{managerMsg}</p>}
                 {managers.length > 0 && (
                     <div className="space-y-2 pt-2 border-t border-white/5">
-                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Текущие сотрудники</p>
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{t.activeEmployees}</p>
                         {managers.map(m => (
                             <div key={m.telegram_id} className="flex items-center justify-between bg-white/[0.02] p-3 rounded-xl border border-white/5">
                                 <div className="flex-1 min-w-0">
@@ -311,13 +311,13 @@ const AdminStats: React.FC<{ t: any }> = ({ t }) => {
                                     </div>
                                     <input 
                                         className="text-[9px] font-bold text-secondary bg-transparent border-none outline-none w-full placeholder:text-secondary/30"
-                                        placeholder="Заметка..."
+                                        placeholder={t.notePlaceholder}
                                         defaultValue={m.note}
                                         onBlur={(e) => handleUpdateNote(m.telegram_id, e.target.value)}
                                     />
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {m.role === 'founder' && <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-500 uppercase">Owner</span>}
+                                    {m.role === 'founder' && <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-500 uppercase">{t.ownerBadge}</span>}
                                     {m.role !== 'founder' && (
                                         <button onClick={() => handleRemoveManager(m.telegram_id)} className="w-8 h-8 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center border border-red-500/10">
                                             <span className="material-symbols-outlined text-[16px]">close</span>

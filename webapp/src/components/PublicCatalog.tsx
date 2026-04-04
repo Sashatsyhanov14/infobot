@@ -67,7 +67,7 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
 
     const handleBook = () => {
         if (!formData.name || !formData.phone || !formData.date || !bookingEx) {
-            tg?.showAlert('Пожалуйста, заполните все поля');
+            tg?.showAlert(t.fillAllFields || 'Пожалуйста, заполните все поля');
             return;
         }
 
@@ -92,7 +92,7 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
         return title.includes(s) || city.includes(s);
     });
 
-    if (loading) return <div className="text-center p-10 animate-pulse text-slate-400">Загрузка каталога...</div>;
+    if (loading) return <div className="text-center p-10 animate-pulse text-slate-400">{t.loading}</div>;
 
     const renderExcursion = (ex: Excursion) => {
         const title = (lang === 'ru' ? ex.title : (ex as any)[`title_${lang}`]) || ex.title;
@@ -113,7 +113,7 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
                     <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-[20px]">search</span>
                     <input
                         type="text"
-                        placeholder={lang === 'ru' ? 'Поиск по городу или названию...' : 'Search by city or title...'}
+                        placeholder={t.searchCatalog || 'Search...'}
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         className="w-full bg-[#1a1a1d] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm focus:border-primary/50 outline-none transition-all placeholder:text-slate-600 shadow-xl"
@@ -152,14 +152,14 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
 
                                 <div className="flex items-center justify-between pt-2">
                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{lang === 'ru' ? 'Стоимость' : 'Price'}</p>
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t.priceLabel}</p>
                                         <p className="text-2xl font-black text-primary">${ex.price_rub}</p>
                                     </div>
                                     <div className="text-right space-y-1">
-                                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{lang === 'ru' ? 'Длительность' : 'Duration'}</p>
+                                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t.durationLabel}</p>
                                         <p className="text-base font-bold text-white flex items-center justify-end gap-1.5">
                                             <span className="material-symbols-outlined text-[18px] text-primary/70">schedule</span>
-                                            {info.duration || (lang === 'ru' ? '4 часа' : '4 hours')}
+                                            {info.duration}
                                         </p>
                                     </div>
                                 </div>
@@ -205,11 +205,11 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
                             {/* Stats Row */}
                             <div className="flex gap-4">
                                 <div className="flex-1 bg-[#1a1a1d] p-4 rounded-2xl border border-white/5 space-y-1">
-                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{lang === 'ru' ? 'Стоимость' : 'Price'}</p>
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{t.priceLabel}</p>
                                     <p className="text-xl font-black text-primary">${selectedEx.price_rub}</p>
                                 </div>
                                 <div className="flex-1 bg-[#1a1a1d] p-4 rounded-2xl border border-white/5 space-y-1">
-                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{lang === 'ru' ? 'Длительность' : 'Duration'}</p>
+                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{t.durationLabel}</p>
                                     <p className="text-base font-bold text-white">{info.duration || '—'}</p>
                                 </div>
                             </div>
@@ -218,7 +218,7 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
                             <div className="space-y-3">
                                 <h4 className="text-lg font-black text-white flex items-center gap-2">
                                     <span className="material-symbols-outlined text-primary">notes</span>
-                                    {lang === 'ru' ? 'Описание' : 'Description'}
+                                    {t.descriptionLabel}
                                 </h4>
                                 <p className="text-slate-300 leading-relaxed text-sm whitespace-pre-wrap">{info.desc}</p>
                             </div>
@@ -228,7 +228,7 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
                                 <div className="space-y-3">
                                     <h4 className="text-lg font-black text-white flex items-center gap-2">
                                         <span className="material-symbols-outlined text-primary">check_circle</span>
-                                        {lang === 'ru' ? 'Что включено' : 'Included'}
+                                        {t.includedLabel}
                                     </h4>
                                     <p className="text-slate-400 text-sm italic border-l-2 border-primary/30 pl-4">{info.included}</p>
                                 </div>
@@ -239,7 +239,7 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
                                 <div className="space-y-3">
                                     <h4 className="text-lg font-black text-white flex items-center gap-2">
                                         <span className="material-symbols-outlined text-primary">near_me</span>
-                                        {lang === 'ru' ? 'Место встречи' : 'Meeting Point'}
+                                        {t.meetingPointLabel}
                                     </h4>
                                     <p className="text-slate-400 text-sm text-left">{info.meeting}</p>
                                 </div>
@@ -252,7 +252,7 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
                                     className="w-full bg-primary text-on-primary py-5 rounded-3xl font-black uppercase tracking-widest text-sm shadow-[0_12px_30px_rgba(208,188,255,0.3)] active:scale-95 transition-all flex items-center justify-center gap-3"
                                 >
                                     <span className="material-symbols-outlined text-[20px]">shopping_cart_checkout</span>
-                                    {lang === 'ru' ? 'Забронировать сейчас' : 'Book Now'}
+                                    {t.bookNowBtn}
                                 </button>
                             </div>
                         </div>
@@ -266,23 +266,23 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
                     <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={() => setBookingEx(null)} />
                     <div className="relative w-full max-w-sm bg-[#1a1a1d] rounded-[32px] border border-white/10 p-8 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200">
                         <div className="text-center space-y-2">
-                            <h4 className="text-xl font-black text-white">{lang === 'ru' ? 'Быстрое бронирование' : 'Quick Booking'}</h4>
-                            <p className="text-xs text-slate-400 px-4">{lang === 'ru' ? 'Оставьте ваши контакты, и наш менеджер сразу свяжется с вами для подтверждения.' : 'Leave your contacts, and our manager will contact you immediately for confirmation.'}</p>
+                            <h4 className="text-xl font-black text-white">{t.quickBooking || 'Quick Booking'}</h4>
+                            <p className="text-xs text-slate-400 px-4">{t.quickBookingDesc || 'Leave your contacts...'}</p>
                         </div>
 
                         <div className="space-y-4">
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">{lang === 'ru' ? 'Ваше имя' : 'Your Name'}</label>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">{t.yourName || 'Your Name'}</label>
                                 <input
                                     type="text"
-                                    placeholder={lang === 'ru' ? 'Иван Иванов' : 'John Doe'}
+                                    placeholder={t.namePlaceholder || 'John Doe'}
                                     value={formData.name}
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
                                     className="w-full bg-black/20 border border-white/5 rounded-2xl p-4 text-sm focus:border-primary/50 outline-none transition-all"
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">{lang === 'ru' ? 'Телефон (WhatsApp)' : 'Phone (WhatsApp)'}</label>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">{t.yourPhone || 'Phone'}</label>
                                 <input
                                     type="tel"
                                     placeholder="+7 (999) 000-00-00"
@@ -292,10 +292,10 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">{lang === 'ru' ? 'Желаемая дата' : 'Desired Date'}</label>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">{t.desiredDate || 'Date'}</label>
                                 <input
                                     type="text"
-                                    placeholder={lang === 'ru' ? '25 мая или "Завтра"' : 'May 25 or "Tomorrow"'}
+                                    placeholder={t.datePlaceholder || 'May 25'}
                                     value={formData.date}
                                     onChange={e => setFormData({ ...formData, date: e.target.value })}
                                     className="w-full bg-black/20 border border-white/5 rounded-2xl p-4 text-sm focus:border-primary/50 outline-none transition-all"
@@ -314,7 +314,7 @@ export default function PublicCatalog({ t, lang, initialExcursionId }: { t: any,
                                 onClick={handleBook}
                                 className="flex-1 py-4 bg-primary text-on-primary rounded-2xl text-xs font-black uppercase tracking-widest shadow-[0_8px_25px_rgba(208,188,255,0.2)] active:scale-95 transition-all"
                             >
-                                {lang === 'ru' ? 'Отправить' : 'Send'}
+                                {t.sendBtn || 'Send'}
                             </button>
                         </div>
                     </div>

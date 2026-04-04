@@ -42,11 +42,11 @@ const AdminRequests: React.FC<{ t?: any }> = ({ t }) => {
         }
     };
 
-    if (loading) return <div className="text-center py-10 opacity-50">Загрузка заявок...</div>;
+    if (loading) return <div className="text-center py-10 opacity-50">{t?.loading || 'Loading...'}</div>;
 
     return (
         <div className="space-y-4 animate-in fade-in duration-500">
-            {requests.length === 0 && <div className="text-center py-20 text-slate-500">Заявок пока нет</div>}
+            {requests.length === 0 && <div className="text-center py-20 text-slate-500">{t?.noResults || 'No requests'}</div>}
 
             {requests.map(req => (
                 <div key={req.id} className="bg-[#1a1a1d] p-5 rounded-3xl border border-white/5 space-y-4">
@@ -56,7 +56,7 @@ const AdminRequests: React.FC<{ t?: any }> = ({ t }) => {
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getStatusStyle(req.status)}`}>
                                     {req.status.toUpperCase()}
                                 </span>
-                                <span className="text-[10px] text-slate-500">{new Date(req.created_at).toLocaleString('ru-RU')}</span>
+                                <span className="text-[10px] text-slate-500">{new Date(req.created_at).toLocaleString()}</span>
                             </div>
                             <h4 className="font-bold text-slate-100 text-lg">{req.excursion_title}</h4>
                         </div>
@@ -65,21 +65,21 @@ const AdminRequests: React.FC<{ t?: any }> = ({ t }) => {
 
                     <div className="grid grid-cols-2 gap-3 text-xs">
                         <div className="bg-black/20 p-3 rounded-2xl border border-white/5">
-                            <p className="text-slate-500 mb-1">КЛИЕНТ</p>
+                            <p className="text-slate-500 mb-1">{t?.roleUser?.toUpperCase() || 'CLIENT'}</p>
                             <p className="font-medium text-slate-200">@{req.users?.username || 'user'}</p>
                             <p className="font-medium text-slate-200 mt-1">{req.full_name}</p>
                         </div>
                         <div className="bg-black/20 p-3 rounded-2xl border border-white/5">
-                            <p className="text-slate-500 mb-1">ДЕТАЛИ</p>
+                            <p className="text-slate-500 mb-1">{t?.detailsLabel || 'DETAILS'}</p>
                             <p className="font-medium text-slate-200">📅 {req.tour_date}</p>
                             <p className="font-medium text-slate-200 mt-1 truncate">🏨 {req.hotel_name}</p>
                         </div>
                     </div>
 
                     <div className="flex gap-2 border-t border-white/5 pt-4">
-                        <button onClick={() => updateStatus(req.id, 'contacted')} className="flex-1 py-2 text-[10px] font-bold bg-yellow-500/10 text-yellow-400 rounded-xl hover:bg-yellow-500/20 transition-all">СВЯЗАЛСЯ</button>
-                        <button onClick={() => updateStatus(req.id, 'done')} className="flex-1 py-2 text-[10px] font-bold bg-green-500/10 text-green-400 rounded-xl hover:bg-green-500/20 transition-all">ГОТОВО</button>
-                        <button onClick={() => updateStatus(req.id, 'cancelled')} className="flex-1 py-2 text-[10px] font-bold bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500/20 transition-all">ОТМЕНА</button>
+                        <button onClick={() => updateStatus(req.id, 'contacted')} className="flex-1 py-2 text-[10px] font-bold bg-yellow-500/10 text-yellow-400 rounded-xl hover:bg-yellow-500/20 transition-all">{t?.contactedBtn || 'CONTACTED'}</button>
+                        <button onClick={() => updateStatus(req.id, 'done')} className="flex-1 py-2 text-[10px] font-bold bg-green-500/10 text-green-400 rounded-xl hover:bg-green-500/20 transition-all">{t?.doneBtn || 'DONE'}</button>
+                        <button onClick={() => updateStatus(req.id, 'cancelled')} className="flex-1 py-2 text-[10px] font-bold bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500/20 transition-all">{t?.cancelBtn || 'CANCEL'}</button>
                     </div>
                 </div>
             ))}
